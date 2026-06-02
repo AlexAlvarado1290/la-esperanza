@@ -1,69 +1,78 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router";
-import { UserPlus, Edit2, ShieldBan, ShieldCheck, KeyRound, Star, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { UserPlus, Edit2, ShieldBan, ShieldCheck, KeyRound, CheckCircle2 } from "lucide-react";
 import { Button, Card, CardContent, Badge } from "../components/ui";
+import { api, ApiError } from "../../lib/api";
+import { useRole } from "../../lib/auth";
+import type { UsuarioAdmin, BackendRol } from "../../lib/types";
 
-interface UserData {
-  id: number;
-  name: string;
-  type: "productor" | "comprador";
-  phone: string;
-  location: string;
-  status: "activo" | "suspendido" | "bloqueado";
-  reports: number;
-  deliveries: number;
-  trust: "alta" | "media" | "baja";
-}
-
-const initialUsers: UserData[] = [
-  { id: 1, name: "Juan Pérez", type: "productor", phone: "0991234567", location: "Sector Norte", status: "activo", reports: 0, deliveries: 34, trust: "alta" },
-  { id: 2, name: "María Gómez", type: "productor", phone: "0987654321", location: "Sector Sur", status: "activo", reports: 1, deliveries: 18, trust: "media" },
-  { id: 3, name: "Restaurante El Sabor", type: "comprador", phone: "022345678", location: "Centro", status: "activo", reports: 0, deliveries: 12, trust: "alta" },
-  { id: 4, name: "Mercado Central", type: "comprador", phone: "0998877665", location: "Plaza Mayor", status: "suspendido", reports: 3, deliveries: 5, trust: "baja" },
-  { id: 5, name: "Luis Cando", type: "productor", phone: "0976543210", location: "Sector Oeste", status: "bloqueado", reports: 5, deliveries: 2, trust: "baja" },
-];
-
-const trustColors = {
-  alta: "success",
-  media: "warning",
-  baja: "danger",
-} as const;
-
-const statusColors = {
-  activo: "success",
-  suspendido: "warning",
-  bloqueado: "danger",
-} as const;
+const statusColors: Record<string, "success" | "warning" | "danger"> = {
+  ACTIVO: "success",
+  SUSPENDIDO: "warning",
+  BLOQUEADO: "danger",
+};
 
 export function UsersList() {
+  const role = useRole();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [users, setUsers] = useState(initialUsers);
-  const [pinReset, setPinReset] = useState<number | null>(null);
+  const [users, setUsers] = useState<UsuarioAdmin[]>([]);
+  const [pinReset, setPinReset] = useState<{ id: number; pinInicial: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const filterType = searchParams.get("tab") || "todos";
 
-  const filteredUsers = users.filter((u) => {
-    if (filterType === "todos") return true;
-    if (filterType === "productor") return u.type === "productor";
-    if (filterType === "comprador") return u.type === "comprador";
-    return true;
-  });
-
-  const cycleStatus = (userId: number) => {
-    setUsers(prev => prev.map(u => {
-      if (u.id !== userId) return u;
-      const cycle: Record<string, "activo" | "suspendido" | "bloqueado"> = {
-        activo: "suspendido",
-        suspendido: "bloqueado",
-        bloqueado: "activo",
-      };
-      return { ...u, status: cycle[u.status] };
-    }));
+  const reload = async () => {
+    setLoading(true);
+    try {
+      const filtroRol: BackendRol | undefined =
+        filterType === "productor" ? "PRODUCTOR" : filterType === "comprador" ? "COMPRADOR" : undefined;
+      const data = await api.get<UsuarioAdmin[]>("/users", { query: { rol: filtroRol } });
+      setUsers(data);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "No se pudo cargar.");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleResetPin = (userId: number) => {
-    setPinReset(userId);
-    setTimeout(() => setPinReset(null), 2500);
+  useEffect(() => {
+    if (role === "admin") reload();
+    else setLoading(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [role, filterType]);
+
+  if (role !== "admin") {
+    return <div className="text-center py-20 text-gray-500 text-lg">Esta sección es exclusiva de la Asociación.</div>;
+  }
+
+  const cycleStatus = async (user: UsuarioAdmin) => {
+    const nextMap: Record<string, "ACTIVO" | "SUSPENDIDO" | "BLOQUEADO"> = {
+      ACTIVO: "SUSPENDIDO",
+      SUSPENDIDO: "BLOQUEADO",
+      BLOQUEADO: "ACTIVO",
+    };
+    const next = nextMap[user.estadoCuenta];
+    const motivo =
+      next === "ACTIVO" ? "Reactivación por la Asociación" : window.prompt(`Motivo para ${next}:`) || "";
+    if (next !== "ACTIVO" && !motivo) return;
+    try {
+      await api.patch(`/users/${user.idUsuario}/estado`, { estado: next, motivo });
+      reload();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Error al cambiar estado.");
+    }
+  };
+
+  const handleResetPin = async (userId: number) => {
+    try {
+      const res = await api.post<{ pinInicial: string }>(`/users/${userId}/reset-pin`);
+      setPinReset({ id: userId, pinInicial: res.pinInicial });
+      setTimeout(() => setPinReset(null), 4000);
+      reload();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Error al reiniciar PIN.");
+    }
   };
 
   return (
@@ -85,7 +94,7 @@ export function UsersList() {
           { key: "todos", label: "Todos" },
           { key: "productor", label: "Productores" },
           { key: "comprador", label: "Compradores" },
-        ].map(tab => (
+        ].map((tab) => (
           <button
             key={tab.key}
             onClick={() => setSearchParams({ tab: tab.key })}
@@ -98,57 +107,41 @@ export function UsersList() {
         ))}
       </div>
 
+      {error && <div className="bg-red-50 text-red-600 p-3 rounded-xl text-sm font-semibold">{error}</div>}
+
       <div className="grid gap-4 mt-6">
-        {filteredUsers.length === 0 ? (
+        {loading ? (
+          <p className="text-center text-gray-500 py-8">Cargando…</p>
+        ) : users.length === 0 ? (
           <p className="text-center text-gray-500 text-lg py-12">No hay usuarios en esta categoría.</p>
         ) : (
-          filteredUsers.map((user) => (
-            <Card key={user.id} className="hover:border-green-400 transition-colors">
+          users.map((user) => (
+            <Card key={user.idUsuario} className="hover:border-green-400 transition-colors">
               <CardContent className="p-5 space-y-4">
-                {/* Header */}
                 <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                   <div>
                     <div className="flex items-center gap-3 mb-2 flex-wrap">
-                      <h2 className="text-2xl font-bold text-gray-900">{user.name}</h2>
-                      <Badge variant={statusColors[user.status]} className="text-xs uppercase px-2 py-0.5">
-                        {user.status}
+                      <h2 className="text-2xl font-bold text-gray-900">{user.nombreCompleto}</h2>
+                      <Badge variant={statusColors[user.estadoCuenta]} className="text-xs uppercase px-2 py-0.5">
+                        {user.estadoCuenta}
                       </Badge>
                     </div>
                     <div className="text-gray-600 text-lg space-y-1">
-                      <p><span className="font-semibold">Tel:</span> {user.phone}</p>
-                      <p><span className="font-semibold">Ubicación:</span> {user.location}</p>
-                      <p className="capitalize text-green-700 font-bold">{user.type}</p>
+                      <p><span className="font-semibold">Tel:</span> {user.telefono}</p>
+                      <p><span className="font-semibold">DPI:</span> {user.cui}</p>
+                      <p className="text-green-700 font-bold uppercase">{user.rol.nombre}</p>
                     </div>
-                  </div>
-
-                  {/* Trust indicators */}
-                  <div className="flex flex-col items-start sm:items-end gap-2 min-w-[140px]">
-                    <div className="flex items-center gap-2">
-                      <Star className="w-4 h-4 text-yellow-500" />
-                      <span className="text-sm font-semibold text-gray-700">Confiabilidad:</span>
-                      <Badge variant={trustColors[user.trust]} className="text-xs uppercase">{user.trust}</Badge>
-                    </div>
-                    <p className="text-sm text-gray-500">
-                      <span className="font-semibold">{user.deliveries}</span> entregas
-                    </p>
-                    {user.reports > 0 && (
-                      <p className="text-sm text-red-600 flex items-center gap-1 font-semibold">
-                        <AlertTriangle className="w-4 h-4" /> {user.reports} reporte{user.reports > 1 ? 's' : ''}
-                      </p>
-                    )}
                   </div>
                 </div>
 
-                {/* PIN reset success */}
-                {pinReset === user.id && (
+                {pinReset?.id === user.idUsuario && (
                   <div className="bg-green-50 text-green-700 p-3 rounded-xl flex items-center gap-2 text-sm font-semibold">
-                    <CheckCircle2 className="w-5 h-5" /> PIN reiniciado a 0000. El usuario debe cambiarlo al ingresar.
+                    <CheckCircle2 className="w-5 h-5" /> PIN reiniciado a <span className="font-mono">{pinReset.pinInicial}</span>. El usuario debe cambiarlo al ingresar.
                   </div>
                 )}
 
-                {/* Actions */}
                 <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100">
-                  <Link to={`/users/new?edit=true&userId=${user.id}`}>
+                  <Link to={`/users/new?edit=true&userId=${user.idUsuario}`}>
                     <Button variant="outline" size="sm" className="gap-2 text-base">
                       <Edit2 className="w-4 h-4" /> Editar
                     </Button>
@@ -157,19 +150,19 @@ export function UsersList() {
                     variant="outline"
                     size="sm"
                     className="gap-2 text-base border-orange-200 text-orange-700 hover:bg-orange-50"
-                    onClick={() => handleResetPin(user.id)}
+                    onClick={() => handleResetPin(user.idUsuario)}
                   >
                     <KeyRound className="w-4 h-4" /> Reiniciar PIN
                   </Button>
                   <Button
-                    variant={user.status === "activo" ? "danger" : "default"}
+                    variant={user.estadoCuenta === "ACTIVO" ? "danger" : "default"}
                     size="sm"
                     className="gap-2 text-base"
-                    onClick={() => cycleStatus(user.id)}
+                    onClick={() => cycleStatus(user)}
                   >
-                    {user.status === "activo" ? (
+                    {user.estadoCuenta === "ACTIVO" ? (
                       <><ShieldBan className="w-4 h-4" /> Suspender</>
-                    ) : user.status === "suspendido" ? (
+                    ) : user.estadoCuenta === "SUSPENDIDO" ? (
                       <><ShieldBan className="w-4 h-4" /> Bloquear</>
                     ) : (
                       <><ShieldCheck className="w-4 h-4" /> Reactivar</>

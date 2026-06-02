@@ -1,8 +1,10 @@
-import { Link, Outlet, useLocation } from "react-router";
-import { LayoutDashboard, Users, Sprout, Handshake, LogOut, Menu, UserCircle, BarChart3 } from "lucide-react";
+import { Link, Outlet, useLocation, useNavigate } from "react-router";
+import { LayoutDashboard, Users, Sprout, Handshake, LogOut, Menu, UserCircle, BarChart3, Tag, Scale, MapPin, History } from "lucide-react";
 import { useState } from "react";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { api, ApiError } from "../../lib/api";
+import { clearSession, useRole } from "../../lib/auth";
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -10,8 +12,24 @@ function cn(...inputs: ClassValue[]) {
 
 export function Layout() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const role = localStorage.getItem('userRole') || 'admin';
+  const role = useRole();
+
+  // RF03 — Cerrar sesión: avisa al backend (audita el logout) y limpia el JWT
+  // local. Si el backend no responde, igual cerramos sesión en el cliente para
+  // no dejar al usuario atrapado con un token inválido.
+  const handleLogout = async () => {
+    try {
+      await api.post("/auth/logout");
+    } catch (err) {
+      // 401 / red caída: igual seguimos al cierre local.
+      if (!(err instanceof ApiError)) console.warn("logout backend falló", err);
+    } finally {
+      clearSession();
+      navigate("/login", { replace: true });
+    }
+  };
 
   let navItems: { name: string; path: string; icon: any }[] = [];
 
@@ -21,6 +39,9 @@ export function Layout() {
       { name: "Usuarios", path: "/users", icon: Users },
       { name: "Productos", path: "/products", icon: Sprout },
       { name: "Acuerdos", path: "/agreements", icon: Handshake },
+      { name: "Categorías", path: "/categories", icon: Tag },
+      { name: "Unidades", path: "/units", icon: Scale },
+      { name: "Puntos Entrega", path: "/delivery-points", icon: MapPin },
       { name: "Reportes", path: "/reports", icon: BarChart3 },
     ];
   } else if (role === 'producer') {
@@ -28,6 +49,7 @@ export function Layout() {
       { name: "Inicio", path: "/dashboard", icon: LayoutDashboard },
       { name: "Mis Productos", path: "/products", icon: Sprout },
       { name: "Acuerdos", path: "/agreements", icon: Handshake },
+      { name: "Historial", path: "/sales-history", icon: History },
       { name: "Mi Perfil", path: "/profile", icon: UserCircle },
     ];
   } else if (role === 'buyer') {
@@ -77,14 +99,13 @@ export function Layout() {
         </nav>
 
         <div className="p-4">
-          <Link
-            to="/login"
-            onClick={() => localStorage.clear()}
-            className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-green-700/50 transition-colors text-lg text-green-100"
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-green-700/50 transition-colors text-lg text-green-100 w-full text-left"
           >
             <LogOut className="w-6 h-6" />
             Salir
-          </Link>
+          </button>
         </div>
       </aside>
 
@@ -126,14 +147,13 @@ export function Layout() {
                   </Link>
                 );
               })}
-              <Link
-                to="/login"
-                onClick={() => { setIsMobileMenuOpen(false); localStorage.clear(); }}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-green-700/50 text-lg text-green-100 mt-4 border-t border-green-700/50"
+              <button
+                onClick={() => { setIsMobileMenuOpen(false); handleLogout(); }}
+                className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-green-700/50 text-lg text-green-100 mt-4 border-t border-green-700/50 w-full text-left"
               >
                 <LogOut className="w-6 h-6" />
                 Cerrar Sesión
-              </Link>
+              </button>
             </nav>
           </div>
         )}
