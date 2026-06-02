@@ -20,7 +20,7 @@ export function UserForm() {
   const [loading, setLoading] = useState(isEditing);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [successAlta, setSuccessAlta] = useState<{ pinInicial: string; mensajeSms: string } | null>(null);
+  const [successAlta, setSuccessAlta] = useState<{ mensajeSms: string } | null>(null);
 
   useEffect(() => {
     if (!isEditing || !userId) return;
@@ -49,7 +49,7 @@ export function UserForm() {
         await api.patch(`/users/${userId}`, { nombreCompleto: nombre, direccion });
         navigate("/users");
       } else {
-        const res = await api.post<{ pinInicial: string; mensajeSms: string }>("/users", {
+        const res = await api.post<{ mensajeSms: string }>("/users", {
           cui, nombreCompleto: nombre, telefono, direccion: direccion || undefined, rol: tipo,
         });
         setSuccessAlta(res);
@@ -68,10 +68,10 @@ export function UserForm() {
       <div className="max-w-2xl mx-auto py-12 text-center space-y-4">
         <CheckCircle2 className="w-16 h-16 mx-auto text-green-500" />
         <h2 className="text-2xl font-bold">Usuario creado</h2>
-        <div className="bg-yellow-50 border border-yellow-100 p-4 rounded-2xl text-left">
-          <p className="text-sm text-yellow-800 font-semibold">PIN inicial: <span className="font-mono text-lg">{successAlta.pinInicial}</span></p>
-          <p className="text-xs text-yellow-700 mt-1">El usuario deberá cambiar su PIN al primer ingreso.</p>
-          <p className="text-xs text-blue-700 mt-2">{successAlta.mensajeSms}</p>
+        <div className="bg-blue-50 border border-blue-100 p-4 rounded-2xl text-left space-y-1">
+          <p className="text-sm text-blue-900 font-semibold">SMS enviado al teléfono registrado</p>
+          <p className="text-xs text-blue-800">{successAlta.mensajeSms}</p>
+          <p className="text-xs text-blue-700 mt-2">Por seguridad, el PIN solo lo recibe el usuario por SMS. El sistema no lo muestra a la administración.</p>
         </div>
         <Button onClick={() => navigate("/users")} size="lg">Volver a la lista</Button>
       </div>
@@ -95,7 +95,7 @@ export function UserForm() {
         <p className="text-sm text-blue-800">
           {isEditing
             ? 'Los campos protegidos (DPI, teléfono, tipo) no pueden modificarse. Usa "Reiniciar PIN" desde la lista de usuarios si es necesario.'
-            : 'El PIN inicial será 0000 (productor/comprador) o 000000 (administrador) y se enviará por SMS al teléfono registrado. El usuario deberá cambiarlo al primer ingreso.'}
+            : 'El sistema generará un PIN aleatorio (4 dígitos productor/comprador, 6 dígitos administrador) y se lo enviará por SMS al teléfono registrado. Por seguridad, ni siquiera la administración puede verlo. El usuario deberá cambiarlo al primer ingreso.'}
         </p>
       </div>
 

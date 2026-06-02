@@ -16,7 +16,7 @@ export function UsersList() {
   const role = useRole();
   const [searchParams, setSearchParams] = useSearchParams();
   const [users, setUsers] = useState<UsuarioAdmin[]>([]);
-  const [pinReset, setPinReset] = useState<{ id: number; pinInicial: string } | null>(null);
+  const [pinReset, setPinReset] = useState<{ id: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -66,8 +66,8 @@ export function UsersList() {
 
   const handleResetPin = async (userId: number) => {
     try {
-      const res = await api.post<{ pinInicial: string }>(`/users/${userId}/reset-pin`);
-      setPinReset({ id: userId, pinInicial: res.pinInicial });
+      await api.post(`/users/${userId}/reset-pin`);
+      setPinReset({ id: userId });
       setTimeout(() => setPinReset(null), 4000);
       reload();
     } catch (e) {
@@ -136,7 +136,7 @@ export function UsersList() {
 
                 {pinReset?.id === user.idUsuario && (
                   <div className="bg-green-50 text-green-700 p-3 rounded-xl flex items-center gap-2 text-sm font-semibold">
-                    <CheckCircle2 className="w-5 h-5" /> PIN reiniciado a <span className="font-mono">{pinReset.pinInicial}</span>. El usuario debe cambiarlo al ingresar.
+                    <CheckCircle2 className="w-5 h-5" /> PIN reiniciado. Se envió un SMS al usuario con el nuevo PIN.
                   </div>
                 )}
 

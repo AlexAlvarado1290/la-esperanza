@@ -125,12 +125,6 @@ export function Profile() {
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <Label className="text-sm text-gray-500">ID del Sistema</Label>
-                  <div className="h-12 bg-gray-100 rounded-xl flex items-center px-4 text-lg font-bold text-gray-500">
-                    #{user.idUsuario}
-                  </div>
-                </div>
-                <div className="space-y-1">
                   <Label className="text-sm text-gray-500">Tipo de Usuario</Label>
                   <div className="h-12 bg-gray-100 rounded-xl flex items-center px-4 text-lg font-bold text-gray-500">
                     {typeLabel}
@@ -142,7 +136,7 @@ export function Profile() {
                     {user.estadoCuenta}
                   </div>
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-1 sm:col-span-2">
                   <Label className="text-sm text-gray-500">Teléfono Principal</Label>
                   <div className="h-12 bg-gray-100 rounded-xl flex items-center gap-2 px-4 text-lg font-bold text-gray-500">
                     <Phone className="w-4 h-4" /> {user.telefono}
